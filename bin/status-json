@@ -1,0 +1,80 @@
+#!/bin/bash
+# Single-call status aggregator for the bar widget: everything the QML side
+# needs to render (status color/detail, baseline/snapshot info, doctor
+# result, remote/timer state, current config) in one process spawn, mirroring
+# the pattern mst.agent-launchers uses for its own status script.
+set -uo pipefail
+
+CLI="$(command -v omarchy-backup || true)"
+if [ -z "$CLI" ]; then
+  jq -n '{installed:false}'
+  exit 0
+fi
+
+STATE_FILE="$HOME/.local/share/omarchy-backup/state.json"
+
+status_out="$("$CLI" status 2>&1)"
+color="$(printf '%s\n' "$status_out" | head -n1 | awk '{print $2}')"
+[ -z "$color" ] && color="ERROR"
+
+state='{"snapshots":[]}'
+[ -f "$STATE_FILE" ] && state="$(cat "$STATE_FILE" 2>/dev/null || echo '{"snapshots":[]}')"
+
+baseline_name="$(echo "$state" | jq -r '.snapshots[] | select(.baseline==true) | .name' | head -n1)"
+baseline_created="$(echo "$state" | jq -r --arg n "$baseline_name" '.snapshots[] | select(.name==$n) | .created_at' | head -n1)"
+snapshot_count="$(echo "$state" | jq '.snapshots | length')"
+doctor_status="$(echo "$state" | jq -r '.last_doctor_status // empty')"
+doctor_run_at="$(echo "$state" | jq -r '.last_doctor_run // empty')"
+doctor_reasons_json="$(echo "$state" | jq -c '.last_doctor_reasons // []')"
+
+config_json="$("$CLI" config list 2>/dev/null || echo '[]')"
+remote_name="$(echo "$config_json" | jq -r '.[] | select(.key=="OB_CFG_REMOTE_NAME") | .value')"
+remote_path="$(echo "$config_json" | jq -r '.[] | select(.key=="OB_CFG_REMOTE_PATH") | .value')"
+
+remote_configured=false
+if [ -n "$remote_name" ] || [[ "$remote_path" = /* ]]; then
+  remote_configured=true
+fi
+
+timer_installed=false
+timer_enabled=false
+if systemctl --user list-unit-files omarchy-backup-snapshot.timer >/dev/null 2>&1 \
+    && systemctl --user list-unit-files omarchy-backup-snapshot.timer 2>/dev/null | grep -q omarchy-backup-snapshot.timer; then
+  timer_installed=true
+  if systemctl --user is-enabled --quiet omarchy-backup-snapshot.timer 2>/dev/null; then
+    timer_enabled=true
+  fi
+fi
+
+jq -n \
+  --arg color "$color" \
+  --arg statusText "$status_out" \
+  --arg baselineName "$baseline_name" \
+  --arg baselineCreated "$baseline_created" \
+  --argjson snapshotCount "$snapshot_count" \
+  --arg doctorStatus "$doctor_status" \
+  --arg doctorRunAt "$doctor_run_at" \
+  --argjson doctorReasons "$doctor_reasons_json" \
+  --arg remoteName "$remote_name" \
+  --arg remotePath "$remote_path" \
+  --argjson remoteConfigured "$remote_configured" \
+  --argjson timerInstalled "$timer_installed" \
+  --argjson timerEnabled "$timer_enabled" \
+  --argjson config "$config_json" \
+  '{
+    installed: true,
+    color: $color,
+    statusText: $statusText,
+    baselineName: $baselineName,
+    baselineCreated: $baselineCreated,
+    snapshotCount: $snapshotCount,
+    doctorStatus: (if $doctorStatus == "" then null else $doctorStatus end),
+    doctorRunAt: (if $doctorRunAt == "" then null else $doctorRunAt end),
+    doctorReasons: $doctorReasons,
+    remoteConfigured: $remoteConfigured,
+    remoteName: $remoteName,
+    remotePath: $remotePath,
+    timerInstalled: $timerInstalled,
+    timerEnabled: $timerEnabled,
+    config: $config
+  }'

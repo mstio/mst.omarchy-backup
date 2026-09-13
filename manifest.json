@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "mst.omarchy-backup",
+  "name": "Omarchy Backup",
+  "version": "0.1.0",
+  "author": "Matthias Stache",
+  "license": "MIT",
+  "description": "Snapshot/baseline status at a glance, one-click snapshot/push/doctor, and the omarchy-backup timer/remote settings, right in the bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "OmarchyBackup.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchy Backup",
+    "description": "Backup status + quick actions",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

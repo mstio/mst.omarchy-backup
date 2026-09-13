@@ -1,0 +1,70 @@
+#!/bin/bash
+# Runs one named widget action and reports {ok, output} as JSON, so the QML
+# side only ever spawns one well-known command per button instead of
+# constructing omarchy-backup argv itself.
+set -uo pipefail
+
+CLI="$(command -v omarchy-backup || true)"
+if [ -z "$CLI" ]; then
+  jq -n '{ok:false, output:"omarchy-backup is not installed / not on PATH"}'
+  exit 0
+fi
+
+action="${1:-}"
+shift || true
+
+STATE_FILE="$HOME/.local/share/omarchy-backup/state.json"
+SNAPSHOTS_DIR="$HOME/.local/share/omarchy-backup/snapshots"
+
+run() {
+  local out
+  out="$("$@" 2>&1)"
+  local code=$?
+  jq -n --arg out "$out" --argjson ok "$([ $code -eq 0 ] && echo true || echo false)" '{ok:$ok, output:$out}'
+}
+
+latest_snapshot_name() {
+  jq -r '.snapshots | sort_by(.created_at) | reverse | .[0].name // empty' "$STATE_FILE" 2>/dev/null
+}
+
+case "$action" in
+  snapshot)
+    out="$("$CLI" snapshot < /dev/null 2>&1)"
+    code=$?
+    name="$(printf '%s\n' "$out" | tail -n1)"
+    if [ $code -eq 0 ] && [ -n "$name" ] && [ -f "$SNAPSHOTS_DIR/$name/manifest.json" ]; then
+      manifest="$SNAPSHOTS_DIR/$name/manifest.json"
+      large="$(jq '.skipped_large_files | length' "$manifest" 2>/dev/null || echo 0)"
+      secret="$(jq '.skipped_secret_files | length' "$manifest" 2>/dev/null || echo 0)"
+      msg="Created '$name'"
+      [ "$large" -gt 0 ] 2>/dev/null && msg="$msg -- $large file(s) skipped for being over the size cap"
+      [ "$secret" -gt 0 ] 2>/dev/null && msg="$msg -- $secret file(s) skipped as likely secrets"
+      jq -n --arg out "$msg" '{ok:true, output:$out}'
+    else
+      jq -n --arg out "$out" --argjson ok "$([ $code -eq 0 ] && echo true || echo false)" '{ok:$ok, output:$out}'
+    fi
+    ;;
+  push-latest)
+    latest="$(latest_snapshot_name)"
+    if [ -z "$latest" ]; then
+      jq -n '{ok:false, output:"No local snapshot to push yet -- run Snapshot first."}'
+    else
+      run "$CLI" push "$latest"
+    fi
+    ;;
+  mark-baseline-latest)
+    latest="$(latest_snapshot_name)"
+    if [ -z "$latest" ]; then
+      jq -n '{ok:false, output:"No local snapshot yet -- run Snapshot first."}'
+    else
+      out="$("$CLI" baseline "$latest" 2>&1)"
+      code=$?
+      jq -n --arg out "Marked '$latest' as baseline." --argjson ok "$([ $code -eq 0 ] && echo true || echo false)" \
+        --arg raw "$out" '{ok:$ok, output:(if $ok then $out else $raw end)}'
+    fi
+    ;;
+  doctor) run "$CLI" doctor ;;
+  install-timers) run "$CLI" timers install ;;
+  uninstall-timers) run "$CLI" timers uninstall ;;
+  *) jq -n --arg a "$action" '{ok:false, output:("Unknown action: " + $a)}' ;;
+esac

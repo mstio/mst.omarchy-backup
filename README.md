@@ -31,10 +31,14 @@ On a stock Omarchy installation:
 
 ```bash
 git clone https://github.com/mstio/omarchy-backup.git ~/Projects/omarchy-backup
-cd ~/Projects/omarchy-backup
-./install.sh
+git -C ~/Projects/omarchy-backup checkout --detach 5136e4ad4d40fbec039e72c50e431514e7b09adb
+~/Projects/omarchy-backup/install.sh
 omarchy-backup doctor
 ```
+
+The full commit SHA pins the CLI revision tested with this plugin release before
+any downloaded code is executed. Review the CLI repository before deliberately
+switching to a newer revision.
 
 The CLI uses tools already present on Omarchy (`bash`, `jq`, `zstd`, `tar`,
 `rclone`, and `systemctl`). See its README before configuring a destination or

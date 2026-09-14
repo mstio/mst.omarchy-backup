@@ -65,6 +65,24 @@ Panel {
     return Color.muted
   }
 
+  // Keep personal home-directory names out of the UI (and screenshots),
+  // while preserving the absolute path expected by the CLI when saving.
+  function displayPath(path) {
+    var value = String(path || "")
+    var home = Quickshell.env("HOME")
+    if (home !== "" && value === home) return "~"
+    if (home !== "" && value.indexOf(home + "/") === 0) return "~" + value.slice(home.length)
+    return value
+  }
+
+  function expandUserPath(path) {
+    var value = String(path || "")
+    var home = Quickshell.env("HOME")
+    if (value === "~") return home
+    if (value.indexOf("~/") === 0) return home + value.slice(1)
+    return value
+  }
+
   function statusExplanation() {
     if (root.color === "GREEN") return "Matches your baseline -- no drift detected. Nothing to do."
     if (root.color === "YELLOW") return "Packages, plugins or files have changed since your baseline. Review with `omarchy-backup status` in a terminal, then either fix the drift or accept it (“Mark latest as baseline” after a new snapshot)."
@@ -376,7 +394,7 @@ Panel {
           Text {
             visible: root.installed
             text: !root.remoteConfigured ? "Remote: not configured"
-              : (root.remoteName !== "" ? "Remote: " + root.remoteName : "Remote: " + root.cfgRemotePath)
+              : (root.remoteName !== "" ? "Remote: " + root.remoteName : "Remote: " + root.displayPath(root.cfgRemotePath))
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -516,10 +534,11 @@ Panel {
           TextField {
             id: localPathField
             Layout.fillWidth: true
-            text: root.cfgRemotePath
-            placeholderText: "/path/to/backup/folder"
+            text: root.displayPath(root.cfgRemotePath)
+            placeholderText: "~/path/to/backup/folder"
             onEditingFinished: {
-              if (text !== root.cfgRemotePath) root.setConfig("OB_CFG_REMOTE_PATH", text, false)
+              var expanded = root.expandUserPath(text)
+              if (expanded !== root.cfgRemotePath) root.setConfig("OB_CFG_REMOTE_PATH", expanded, false)
             }
           }
           Text {

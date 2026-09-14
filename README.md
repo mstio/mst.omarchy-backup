@@ -1,44 +1,98 @@
-# Omarchy Backup (bar widget)
+# Omarchy Backup
 
-An Omarchy shell bar-widget plugin: a theme-tinted status icon (colored dot
-for GREEN/YELLOW/RED/UNKNOWN drift status) that opens a dialog with
-snapshot/push/doctor actions and every setting of the
-[`omarchy-backup`](https://github.com/mstio/omarchy-backup) CLI.
+A bar widget for the [`omarchy-backup`](https://github.com/mstio/omarchy-backup)
+CLI. It keeps baseline drift, backup health, automatic timers, and the most
+important recovery actions visible without replacing the CLI that performs the
+actual backup work.
 
-## Requires
+![Omarchy Backup widget showing a healthy baseline, actions, and automatic backup settings](preview.png)
 
-The separate **`omarchy-backup` CLI** must be installed and on `PATH` --
-this plugin only shells out to it (plus `jq`/`systemctl` for a couple of
-read-only lookups). Without it, the icon still shows but the dialog reports
-"omarchy-backup not found on PATH". See
-[github.com/mstio/omarchy-backup](https://github.com/mstio/omarchy-backup)
-for that tool and its own README.
+## Features
 
-## Install
+- GREEN/YELLOW/RED baseline status directly in the Omarchy bar.
+- Plain-language status explanation, baseline age, snapshot count, last doctor
+  result, and configured destination.
+- One-click snapshot, baseline, remote push, doctor, and timer actions with
+  inline results.
+- Controls for automatic backups, snapshot/doctor frequency, destination,
+  retention, and maximum file size.
+- Home-directory paths are displayed as `~/…`, keeping usernames out of the UI
+  and screenshots while the CLI still receives a valid absolute path.
+
+## Requirement: install the CLI first
+
+This plugin is only the user interface. The separate
+[`omarchy-backup` CLI](https://github.com/mstio/omarchy-backup) is required and
+must be available on `PATH`; it owns all snapshot, validation, remote, retention,
+and restore logic. Without it, the widget remains visible but reports
+`omarchy-backup not found on PATH`.
+
+On a stock Omarchy installation:
 
 ```bash
-omarchy plugin add https://github.com/mstio/mst.omarchy-backup --enable
+git clone https://github.com/mstio/omarchy-backup.git ~/Projects/omarchy-backup
+cd ~/Projects/omarchy-backup
+./install.sh
+omarchy-backup doctor
 ```
 
-## What it shows
+The CLI uses tools already present on Omarchy (`bash`, `jq`, `zstd`, `tar`,
+`rclone`, and `systemctl`). See its README before configuring a destination or
+restoring a machine.
 
-- **Status**: drift color vs. your baseline, with a plain-language
-  explanation and suggested next step for each state.
-- **Actions**: Snapshot now / Mark latest as baseline / Push latest / Run
-  doctor -- each backgrounded, with the result shown inline (e.g. how many
-  files a snapshot skipped, or the exact reason `doctor` is DEGRADED).
-- **Options**: every `omarchy-backup config.conf` key -- automatic
-  backups on/off, snapshot/doctor frequency, the backup destination (a
-  local/mounted folder path), remote retention, and the per-file size cap.
+## Install the plugin
 
-Never edits `config.conf` directly -- every change goes through
-`omarchy-backup config set`, so the CLI and the widget can never disagree
-about what's valid.
+```bash
+omarchy plugin add https://github.com/mstio/mst.omarchy-backup.git --enable
+```
 
-## Notes for future maintenance
+Click the backup icon in the bar to open the panel. The colored dot means:
 
-- No native file/folder picker (`QtQuick.Dialogs`) here on purpose -- it
-  reliably crashed a `gdbus` helper process in this Quickshell environment.
-  Don't re-add one without first confirming it's actually stable.
-- No hardcoded paths -- uses `$HOME`/`Quickshell.env("HOME")` throughout,
-  so it works for any user.
+| Color | Meaning | Automatic behavior |
+|---|---|---|
+| GREEN | Live system matches the known-good baseline | No redundant snapshot when “skip if clean” is enabled |
+| YELLOW | Packages, plugins, or files drifted | Creates and verifies a rolling snapshot; pushes it when a destination is configured |
+| RED | Baseline or required tooling is broken | Refuses automatic backup until the problem is repaired |
+
+YELLOW is not automatically accepted as the new known-good baseline. Review the
+drift first, then use **Mark latest as baseline** only when the changed system is
+known to work.
+
+## Update or remove
+
+```bash
+omarchy plugin update mst.omarchy-backup
+omarchy plugin remove mst.omarchy-backup
+```
+
+Removing the plugin removes only the bar UI. It does not uninstall the CLI,
+delete snapshots, change the remote destination, or remove CLI timers.
+
+## Security and privacy
+
+Omarchy shell plugins execute as the current user and are not sandboxed; review
+the repository before installing. This plugin calls the local `omarchy-backup`
+CLI and its two small wrapper scripts. Status collection also performs read-only
+`jq` and `systemctl --user` lookups. The plugin has no telemetry and does not
+store credentials or implement network transfers itself; a configured CLI may
+write verified snapshots through `rclone`.
+
+Destination paths under the current home directory are shortened to `~/…` in
+the interface. Secret-shaped files and credentials are excluded by the CLI, not
+by this UI; consult the CLI README for the exact backup boundary.
+
+## Development
+
+```bash
+omarchy plugin validate .
+bash -n bin/run-action bin/status-json
+```
+
+The plugin deliberately avoids a native `QtQuick.Dialogs` folder picker because
+that picker triggered a reproducible portal helper crash in the target
+Quickshell environment. The plain destination field supports both absolute
+paths and `~/…`; raw `rclone` remotes remain configurable through the CLI.
+
+## License
+
+[MIT](LICENSE)

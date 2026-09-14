@@ -133,12 +133,32 @@ Panel {
     statusProc.running = true
   }
 
+  // A plain "if running, drop it" guard silently loses clicks when the
+  // user runs the natural sequence (Snapshot -> Mark latest as baseline ->
+  // Push latest) faster than each step finishes -- snapshot alone takes
+  // several seconds. A dropped "Mark latest as baseline" click leaves the
+  // old baseline in place with no visible error, so status stays YELLOW
+  // forever no matter how many times snapshot/push are run afterwards.
+  // Queue instead, mirroring pendingConfigWrites below.
+  property var pendingActions: []
+
   function runAction(action, label) {
+    var actions = root.pendingActions.slice()
+    actions.push({action: action, label: label})
+    root.pendingActions = actions
+    root.processActionQueue()
+  }
+
+  function processActionQueue() {
     if (actionProc.running) return
+    if (root.pendingActions.length === 0) return
+    var actions = root.pendingActions.slice()
+    var next = actions.shift()
+    root.pendingActions = actions
     root.actionRunning = true
-    root.lastActionLabel = label
+    root.lastActionLabel = next.label
     root.lastActionResult = ""
-    actionProc.command = [root.pluginDir + "/bin/run-action", action]
+    actionProc.command = [root.pluginDir + "/bin/run-action", next.action]
     actionProc.running = true
   }
 
@@ -196,6 +216,7 @@ Panel {
         root.lastActionResult = root.lastActionOk ? "Done." : "Failed (see logs)."
       }
       root.refreshStatus()
+      root.processActionQueue()
     }
   }
 

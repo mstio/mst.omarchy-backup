@@ -30,7 +30,10 @@ and restore logic. Without it, the widget remains visible but reports
 On a stock Omarchy installation:
 
 ```bash
-git clone https://github.com/mstio/omarchy-backup.git ~/Projects/omarchy-backup
+mkdir -p ~/Projects/omarchy-backup
+git -C ~/Projects/omarchy-backup init
+git -C ~/Projects/omarchy-backup remote add origin https://github.com/mstio/omarchy-backup.git
+git -C ~/Projects/omarchy-backup fetch --depth 1 origin 5136e4ad4d40fbec039e72c50e431514e7b09adb
 git -C ~/Projects/omarchy-backup checkout --detach 5136e4ad4d40fbec039e72c50e431514e7b09adb
 ~/Projects/omarchy-backup/install.sh
 omarchy-backup doctor

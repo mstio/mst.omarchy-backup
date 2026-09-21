@@ -33,8 +33,8 @@ On a stock Omarchy installation:
 mkdir -p ~/Projects/omarchy-backup
 git -C ~/Projects/omarchy-backup init
 git -C ~/Projects/omarchy-backup remote add origin https://github.com/mstio/omarchy-backup.git
-git -C ~/Projects/omarchy-backup fetch --depth 1 origin defa44477e3d8fbeccab9f9c4776cb3c1e04fed0
-git -C ~/Projects/omarchy-backup checkout --detach defa44477e3d8fbeccab9f9c4776cb3c1e04fed0
+git -C ~/Projects/omarchy-backup fetch --depth 1 origin 00d68d79b23a3f956be3dd2bd36445dcba05f72a
+git -C ~/Projects/omarchy-backup checkout --detach 00d68d79b23a3f956be3dd2bd36445dcba05f72a
 ~/Projects/omarchy-backup/install.sh
 omarchy-backup doctor
 ```

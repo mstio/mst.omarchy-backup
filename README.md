@@ -33,8 +33,8 @@ On a stock Omarchy installation:
 mkdir -p ~/Projects/omarchy-backup
 git -C ~/Projects/omarchy-backup init
 git -C ~/Projects/omarchy-backup remote add origin https://github.com/mstio/omarchy-backup.git
-git -C ~/Projects/omarchy-backup fetch --depth 1 origin 5136e4ad4d40fbec039e72c50e431514e7b09adb
-git -C ~/Projects/omarchy-backup checkout --detach 5136e4ad4d40fbec039e72c50e431514e7b09adb
+git -C ~/Projects/omarchy-backup fetch --depth 1 origin defa44477e3d8fbeccab9f9c4776cb3c1e04fed0
+git -C ~/Projects/omarchy-backup checkout --detach defa44477e3d8fbeccab9f9c4776cb3c1e04fed0
 ~/Projects/omarchy-backup/install.sh
 omarchy-backup doctor
 ```
@@ -93,7 +93,12 @@ by this UI; consult the CLI README for the exact backup boundary.
 ```bash
 omarchy plugin validate .
 bash -n bin/run-action bin/status-json
+tests/run-tests.sh
 ```
+
+Action and status wrappers put hard deadlines around child processes and cap
+their output before encoding JSON. The long-lived shell therefore never buffers
+unbounded CLI or remote-controlled output in `StdioCollector`.
 
 The plugin deliberately avoids a native `QtQuick.Dialogs` folder picker because
 that picker triggered a reproducible portal helper crash in the target

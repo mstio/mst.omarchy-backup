@@ -4,6 +4,34 @@
 # result, remote/timer state, current config) in one process spawn, mirroring
 # the pattern mst.agent-launchers uses for its own status script.
 set -uo pipefail
+umask 077
+
+readonly STATUS_OUTPUT_MAX_BYTES=8192
+readonly CONFIG_OUTPUT_MAX_BYTES=32768
+readonly STATE_MAX_BYTES=65536
+
+CAPTURE_OUTPUT=""
+CAPTURE_CODE=1
+
+capture_bounded() {
+  local max_bytes="$1" deadline="$2"
+  shift 2
+  local tmp size
+  local -a pipeline_status
+  tmp="$(mktemp)" || return 1
+  timeout --signal=TERM --kill-after=2s "${deadline}s" "$@" < /dev/null 2>&1 \
+    | head -c "$((max_bytes + 1))" > "$tmp"
+  pipeline_status=("${PIPESTATUS[@]}")
+  CAPTURE_CODE="${pipeline_status[0]}"
+  size="$(stat -c '%s' -- "$tmp" 2>/dev/null || echo "$((max_bytes + 1))")"
+  if [ "$size" -gt "$max_bytes" ]; then
+    CAPTURE_OUTPUT=""
+    CAPTURE_CODE=1
+  else
+    CAPTURE_OUTPUT="$(cat -- "$tmp")"
+  fi
+  rm -f -- "$tmp"
+}
 
 CLI="$(command -v omarchy-backup || true)"
 if [ -z "$CLI" ]; then
@@ -13,12 +41,29 @@ fi
 
 STATE_FILE="$HOME/.local/share/omarchy-backup/state.json"
 
-status_out="$("$CLI" status 2>&1)"
+capture_bounded "$STATUS_OUTPUT_MAX_BYTES" 60 "$CLI" status
+status_out="$CAPTURE_OUTPUT"
+[ "$CAPTURE_CODE" -eq 0 ] || status_out="Status: ERROR (status command exceeded its output or time limit)"
 color="$(printf '%s\n' "$status_out" | head -n1 | awk '{print $2}')"
 [ -z "$color" ] && color="ERROR"
 
 state='{"snapshots":[]}'
-[ -f "$STATE_FILE" ] && state="$(cat "$STATE_FILE" 2>/dev/null || echo '{"snapshots":[]}')"
+state_size="$(stat -c '%s' -- "$STATE_FILE" 2>/dev/null || echo 0)"
+if [ -f "$STATE_FILE" ] && [ "$state_size" -le "$STATE_MAX_BYTES" ]; then
+  state="$(jq -c '
+    if (type == "object" and (.snapshots | type == "array" and length <= 3)) then
+      {
+        snapshots: [.snapshots[] | select(
+          (.name | type == "string" and length <= 128)
+          and (.created_at | type == "string" and length <= 64)
+        )],
+        last_doctor_status: ((.last_doctor_status // "") | tostring | .[0:32]),
+        last_doctor_run: ((.last_doctor_run // "") | tostring | .[0:64]),
+        last_doctor_reasons: [(.last_doctor_reasons // [])[:32][] | tostring | .[0:512]]
+      }
+    else {snapshots:[]} end
+  ' "$STATE_FILE" 2>/dev/null || echo '{"snapshots":[]}')"
+fi
 
 baseline_name="$(echo "$state" | jq -r '.snapshots[] | select(.baseline==true) | .name' | head -n1)"
 baseline_created="$(echo "$state" | jq -r --arg n "$baseline_name" '.snapshots[] | select(.name==$n) | .created_at' | head -n1)"
@@ -27,7 +72,16 @@ doctor_status="$(echo "$state" | jq -r '.last_doctor_status // empty')"
 doctor_run_at="$(echo "$state" | jq -r '.last_doctor_run // empty')"
 doctor_reasons_json="$(echo "$state" | jq -c '.last_doctor_reasons // []')"
 
-config_json="$("$CLI" config list 2>/dev/null || echo '[]')"
+capture_bounded "$CONFIG_OUTPUT_MAX_BYTES" 10 "$CLI" config list
+config_json="$CAPTURE_OUTPUT"
+if [ "$CAPTURE_CODE" -ne 0 ] || ! printf '%s\n' "$config_json" | jq -e '
+    type == "array" and length <= 16
+    and all(.[]; type == "object"
+      and (.key | type == "string" and length <= 64)
+      and (.value | type == "string" and length <= 4096))
+  ' >/dev/null 2>&1; then
+  config_json='[]'
+fi
 remote_name="$(echo "$config_json" | jq -r '.[] | select(.key=="OB_CFG_REMOTE_NAME") | .value')"
 remote_path="$(echo "$config_json" | jq -r '.[] | select(.key=="OB_CFG_REMOTE_PATH") | .value')"
 
@@ -38,10 +92,10 @@ fi
 
 timer_installed=false
 timer_enabled=false
-if systemctl --user list-unit-files omarchy-backup-snapshot.timer >/dev/null 2>&1 \
-    && systemctl --user list-unit-files omarchy-backup-snapshot.timer 2>/dev/null | grep -q omarchy-backup-snapshot.timer; then
+if timeout --signal=TERM --kill-after=1s 3s systemctl --user list-unit-files omarchy-backup-snapshot.timer >/dev/null 2>&1 \
+    && timeout --signal=TERM --kill-after=1s 3s systemctl --user list-unit-files omarchy-backup-snapshot.timer 2>/dev/null | grep -q omarchy-backup-snapshot.timer; then
   timer_installed=true
-  if systemctl --user is-enabled --quiet omarchy-backup-snapshot.timer 2>/dev/null; then
+  if timeout --signal=TERM --kill-after=1s 3s systemctl --user is-enabled --quiet omarchy-backup-snapshot.timer 2>/dev/null; then
     timer_enabled=true
   fi
 fi

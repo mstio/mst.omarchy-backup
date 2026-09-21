@@ -3,6 +3,38 @@
 # side only ever spawns one well-known command per button instead of
 # constructing omarchy-backup argv itself.
 set -uo pipefail
+umask 077
+
+readonly ACTION_OUTPUT_CAPTURE_MAX_BYTES=16384
+readonly ACTION_OUTPUT_FORWARD_MAX_BYTES=4096
+readonly ACTION_TIMEOUT_SECONDS=900
+readonly STATE_MAX_BYTES=65536
+
+CAPTURE_OUTPUT=""
+CAPTURE_CODE=1
+
+capture_bounded() {
+  local deadline="$1"
+  shift
+  local tmp size
+  local -a pipeline_status
+  tmp="$(mktemp)" || return 1
+  timeout --signal=TERM --kill-after=5s "${deadline}s" "$@" < /dev/null 2>&1 \
+    | head -c "$((ACTION_OUTPUT_CAPTURE_MAX_BYTES + 1))" > "$tmp"
+  pipeline_status=("${PIPESTATUS[@]}")
+  CAPTURE_CODE="${pipeline_status[0]}"
+  size="$(stat -c '%s' -- "$tmp" 2>/dev/null || echo "$((ACTION_OUTPUT_CAPTURE_MAX_BYTES + 1))")"
+  if [ "$size" -gt "$ACTION_OUTPUT_CAPTURE_MAX_BYTES" ]; then
+    CAPTURE_OUTPUT="Action stopped: CLI output exceeded the ${ACTION_OUTPUT_CAPTURE_MAX_BYTES}-byte safety limit."
+    CAPTURE_CODE=1
+  elif [ "$CAPTURE_CODE" -eq 124 ] || [ "$CAPTURE_CODE" -eq 137 ]; then
+    CAPTURE_OUTPUT="Action stopped after the ${deadline}-second safety deadline."
+    CAPTURE_CODE=1
+  else
+    CAPTURE_OUTPUT="$(tail -c "$ACTION_OUTPUT_FORWARD_MAX_BYTES" -- "$tmp")"
+  fi
+  rm -f -- "$tmp"
+}
 
 CLI="$(command -v omarchy-backup || true)"
 if [ -z "$CLI" ]; then
@@ -17,20 +49,26 @@ STATE_FILE="$HOME/.local/share/omarchy-backup/state.json"
 SNAPSHOTS_DIR="$HOME/.local/share/omarchy-backup/snapshots"
 
 run() {
-  local out
-  out="$("$@" 2>&1)"
-  local code=$?
-  jq -n --arg out "$out" --argjson ok "$([ $code -eq 0 ] && echo true || echo false)" '{ok:$ok, output:$out}'
+  local ok=false
+  capture_bounded "$ACTION_TIMEOUT_SECONDS" "$@"
+  [ "$CAPTURE_CODE" -eq 0 ] && ok=true
+  jq -n --arg out "$CAPTURE_OUTPUT" --argjson ok "$ok" '{ok:$ok, output:$out}'
 }
 
 latest_snapshot_name() {
-  jq -r '.snapshots | sort_by(.created_at) | reverse | .[0].name // empty' "$STATE_FILE" 2>/dev/null
+  local size
+  size="$(stat -c '%s' -- "$STATE_FILE" 2>/dev/null || echo 0)"
+  [ "$size" -le "$STATE_MAX_BYTES" ] || return 1
+  timeout --signal=TERM --kill-after=1s 2s \
+    jq -r '.snapshots | if type == "array" and length <= 3 then sort_by(.created_at) | reverse | .[0].name // empty else empty end' \
+      "$STATE_FILE" 2>/dev/null
 }
 
 case "$action" in
   snapshot)
-    out="$("$CLI" snapshot < /dev/null 2>&1)"
-    code=$?
+    capture_bounded "$ACTION_TIMEOUT_SECONDS" "$CLI" snapshot
+    out="$CAPTURE_OUTPUT"
+    code="$CAPTURE_CODE"
     name="$(printf '%s\n' "$out" | tail -n1)"
     if [ $code -eq 0 ] && [ -n "$name" ] && [ -f "$SNAPSHOTS_DIR/$name/manifest.json" ]; then
       manifest="$SNAPSHOTS_DIR/$name/manifest.json"
@@ -41,7 +79,9 @@ case "$action" in
       [ "$secret" -gt 0 ] 2>/dev/null && msg="$msg -- $secret file(s) skipped as likely secrets"
       jq -n --arg out "$msg" '{ok:true, output:$out}'
     else
-      jq -n --arg out "$out" --argjson ok "$([ $code -eq 0 ] && echo true || echo false)" '{ok:$ok, output:$out}'
+      ok=false
+      [ "$code" -eq 0 ] && ok=true
+      jq -n --arg out "$out" --argjson ok "$ok" '{ok:$ok, output:$out}'
     fi
     ;;
   push-latest)
@@ -57,10 +97,11 @@ case "$action" in
     if [ -z "$latest" ]; then
       jq -n '{ok:false, output:"No local snapshot yet -- run Snapshot first."}'
     else
-      out="$("$CLI" baseline "$latest" 2>&1)"
-      code=$?
-      jq -n --arg out "Marked '$latest' as baseline." --argjson ok "$([ $code -eq 0 ] && echo true || echo false)" \
-        --arg raw "$out" '{ok:$ok, output:(if $ok then $out else $raw end)}'
+      capture_bounded "$ACTION_TIMEOUT_SECONDS" "$CLI" baseline "$latest"
+      ok=false
+      [ "$CAPTURE_CODE" -eq 0 ] && ok=true
+      jq -n --arg out "Marked '$latest' as baseline." --argjson ok "$ok" \
+        --arg raw "$CAPTURE_OUTPUT" '{ok:$ok, output:(if $ok then $out else $raw end)}'
     fi
     ;;
   doctor) run "$CLI" doctor ;;

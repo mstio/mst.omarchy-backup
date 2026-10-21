@@ -6,6 +6,7 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // Bar widget for the `omarchy-backup` CLI: a theme-tinted status icon (green
@@ -61,8 +62,8 @@ Panel {
   function statusColor() {
     if (root.color === "GREEN") return "#4caf50"
     if (root.color === "YELLOW") return "#e0a030"
-    if (root.color === "RED") return Color.urgent
-    return Color.muted
+    if (root.color === "RED") return Commons.Color.urgent
+    return Commons.Color.muted
   }
 
   // Keep personal home-directory names out of the UI (and screenshots),
@@ -285,7 +286,7 @@ Panel {
       anchors.bottom: iconImage.bottom
       color: root.statusColor()
       border.width: 1
-      border.color: root.bar ? root.bar.background : Color.background
+      border.color: root.bar ? root.bar.background : Commons.Color.background
       visible: root.installed
     }
 
@@ -332,7 +333,7 @@ Panel {
 
           Text {
             text: "Omarchy Backup"
-            color: Color.foreground
+            color: Commons.Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.subtitle
             font.bold: true
@@ -355,10 +356,10 @@ Panel {
           }
         }
 
-        PanelSeparator { foreground: Color.foreground }
+        PanelSeparator { foreground: Commons.Color.foreground }
 
         // ---- status ----
-        PanelSectionHeader { text: "STATUS"; foreground: Color.foreground }
+        PanelSectionHeader { text: "STATUS"; foreground: Commons.Color.foreground }
 
         ColumnLayout {
           Layout.fillWidth: true
@@ -366,7 +367,7 @@ Panel {
 
           Text {
             text: root.installed ? root.color : "omarchy-backup not found on PATH"
-            color: root.installed ? root.statusColor() : Color.urgent
+            color: root.installed ? root.statusColor() : Commons.Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.body
             font.bold: true
@@ -377,7 +378,7 @@ Panel {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             text: root.statusExplanation()
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -389,7 +390,7 @@ Panel {
             text: root.baselineName !== ""
               ? "Baseline: " + root.baselineName + "  ·  " + root.snapshotCount + "/3 snapshots"
               : "No baseline set yet -- take a snapshot, then mark it as baseline."
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -397,7 +398,7 @@ Panel {
           Text {
             visible: root.installed && root.doctorStatus !== ""
             text: "Doctor: " + root.doctorStatus + (root.doctorRunAt !== "" ? " (" + root.doctorRunAt.slice(0, 10) + ")" : "")
-            color: root.doctorStatus === "HEALTHY" ? Color.muted : Color.urgent
+            color: root.doctorStatus === "HEALTHY" ? Commons.Color.muted : Commons.Color.urgent
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -407,7 +408,7 @@ Panel {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             text: root.doctorReasons.map(function(r) { return "• " + r }).join("\n")
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -416,16 +417,16 @@ Panel {
             visible: root.installed
             text: !root.remoteConfigured ? "Remote: not configured"
               : (root.remoteName !== "" ? "Remote: " + root.remoteName : "Remote: " + root.displayPath(root.cfgRemotePath))
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
         }
 
-        PanelSeparator { foreground: Color.foreground }
+        PanelSeparator { foreground: Commons.Color.foreground }
 
         // ---- actions ----
-        PanelSectionHeader { text: "ACTIONS"; foreground: Color.foreground }
+        PanelSectionHeader { text: "ACTIONS"; foreground: Commons.Color.foreground }
 
         Flow {
           Layout.fillWidth: true
@@ -470,21 +471,21 @@ Panel {
           Layout.fillWidth: true
           wrapMode: Text.Wrap
           text: root.lastActionLabel + ": " + root.lastActionResult
-          color: root.lastActionOk ? Color.muted : Color.urgent
+          color: root.lastActionOk ? Commons.Color.muted : Commons.Color.urgent
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
 
-        PanelSeparator { foreground: Color.foreground }
+        PanelSeparator { foreground: Commons.Color.foreground }
 
         // ---- options ----
-        PanelSectionHeader { text: "OPTIONS"; foreground: Color.foreground }
+        PanelSectionHeader { text: "OPTIONS"; foreground: Commons.Color.foreground }
 
         RowLayout {
           Layout.fillWidth: true
           Text {
             text: "Automatic backups & doctor"
-            color: Color.foreground
+            color: Commons.Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -500,7 +501,7 @@ Panel {
           spacing: Style.spacing.xxs
           Text {
             text: "Snapshot every"
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -516,7 +517,7 @@ Panel {
           spacing: Style.spacing.xxs
           Text {
             text: "Doctor check every"
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -531,7 +532,7 @@ Panel {
           Layout.fillWidth: true
           Text {
             text: "Skip snapshot if nothing changed"
-            color: Color.foreground
+            color: Commons.Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -548,7 +549,7 @@ Panel {
 
           Text {
             text: "Backup destination"
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -564,7 +565,7 @@ Panel {
           }
           Text {
             text: "Press Enter or click away to save. Any local or mounted folder (e.g. an rclone-mounted Drive folder, a NAS mount, or a plain disk path). omarchy-backup only ever writes below it, under <folder>/<hostname>/."
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             wrapMode: Text.Wrap
@@ -573,7 +574,7 @@ Panel {
           Text {
             visible: root.cfgRemoteName !== ""
             text: "A raw rclone remote ('" + root.cfgRemoteName + "') is set via the CLI (`omarchy-backup config set OB_CFG_REMOTE_NAME ...`) and takes priority over the folder above -- clear it there to use a local folder instead."
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             wrapMode: Text.Wrap
@@ -604,12 +605,12 @@ Panel {
           Layout.fillWidth: true
           wrapMode: Text.Wrap
           text: "Files larger than this are left out of the snapshot rather than guessed at up front -- the default (20MB) works for dotfiles/scripts; \"Snapshot now\" tells you if anything got skipped, raise this only if that happens for a file you actually want included."
-          color: Color.muted
+          color: Commons.Color.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
 
-        PanelSeparator { foreground: Color.foreground }
+        PanelSeparator { foreground: Commons.Color.foreground }
 
         RowLayout {
           Layout.fillWidth: true
@@ -619,7 +620,7 @@ Panel {
             wrapMode: Text.Wrap
             text: "Timers: " + (root.timerInstalled ? (root.timerEnabled ? "installed & enabled" : "installed, disabled") : "not installed yet")
               + "  ·  ~/.config/omarchy-backup/config.conf"
-            color: Color.muted
+            color: Commons.Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }

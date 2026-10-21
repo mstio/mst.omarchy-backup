@@ -252,7 +252,7 @@ Panel {
     bar: root.bar
     text: ""
     hasVisualContent: true
-    fixedWidth: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+    fixedWidth: Style.bar.iconSlot
     tooltipText: root.statusText + "\n" + root.statusExplanation() + (root.baselineName !== ""
       ? "\n\nBaseline: " + root.baselineName + " (" + root.snapshotCount + "/3 snapshots)"
       : "")

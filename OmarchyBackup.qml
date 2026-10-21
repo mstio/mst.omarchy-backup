@@ -253,8 +253,11 @@ Panel {
     text: ""
     hasVisualContent: true
     fixedWidth: Style.bar.iconSlot
-    tooltipText: root.statusText + "\n" + root.statusExplanation() + (root.baselineName !== ""
-      ? "\n\nBaseline: " + root.baselineName + " (" + root.snapshotCount + "/3 snapshots)"
+    // Keep it short: statusText is the whole `status` report, and a tooltip
+    // taller than the room below the bar is slid up over the icon, where it
+    // swallows the hover and the click. The details are in the dialog.
+    tooltipText: root.statusText.split("\n")[0] + (root.baselineName !== ""
+      ? "\nBaseline: " + root.baselineName + " (" + root.snapshotCount + "/3 snapshots)"
       : "")
 
     Image {
